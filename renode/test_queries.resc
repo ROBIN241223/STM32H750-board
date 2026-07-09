@@ -1,0 +1,9 @@
+echo CR1
+sysbus ReadDoubleWord 0x40011000
+sysbus ReadDoubleWord 0x4001101C
+sysbus ReadDoubleWord 0x40011028
+sysbus ReadDoubleWord 0x40004400
+sysbus ReadDoubleWord 0x4000441C
+sysbus ReadDoubleWord 0x40004428
+echo DONE
+quit

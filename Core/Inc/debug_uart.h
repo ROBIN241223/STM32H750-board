@@ -87,4 +87,17 @@ void Debug_Test(void);
  */
 void Debug_PrintHex(const uint8_t *data, uint32_t size);
 
+/**
+ * @brief Feed a received byte into debug UART ring buffer
+ *        Called from merged HAL callback (ros2_comm.c)
+ * @param byte Received byte
+ */
+void Debug_RxByte(uint8_t byte);
+
+/**
+ * @brief Re-arm debug UART RX interrupt
+ *        Called from merged HAL callback (ros2_comm.c)
+ */
+void Debug_RearmRx(void);
+
 #endif /* DEBUG_UART_H */

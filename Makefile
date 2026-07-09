@@ -37,6 +37,13 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
+Core/Src/debug_uart.c \
+Core/Src/ros2_comm.c \
+Core/Src/ros2_sensor.c \
+Core/Src/ros2_motor.c \
+Core/Src/fdcan_comm.c \
+Core/Src/sd_logger.c \
+Core/Src/ota_update.c \
 Core/Src/stm32h7xx_it.c \
 Core/Src/stm32h7xx_hal_msp.c \
 Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c \
@@ -230,7 +237,22 @@ $(BUILD_DIR):
 #######################################
 clean:
 	-rm -fR $(BUILD_DIR)
-  
+
+#######################################
+# bootloader
+#######################################
+bootloader:
+	$(MAKE) -f Bootloader/Makefile clean
+	$(MAKE) -f Bootloader/Makefile
+
+clean-bootloader:
+	$(MAKE) -f Bootloader/Makefile clean
+
+#######################################
+# build all (app + bootloader)
+#######################################
+all-app: all bootloader
+
 #######################################
 # dependencies
 #######################################

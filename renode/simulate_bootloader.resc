@@ -1,0 +1,11 @@
+:name: STM32H750 Bootloader Simulation
+
+mach create
+machine LoadPlatformDescription @renode/stm32h750_board.repl
+
+showAnalyzer sysbus.usart2
+
+$elf = @build_boot/STM32H750_BOOT.elf
+sysbus LoadELF $elf
+
+start

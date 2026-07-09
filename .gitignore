@@ -1,0 +1,13 @@
+build/
+build_boot/
+*.o
+*.d
+*.elf
+*.hex
+*.bin
+*.map
+__pycache__/
+*.pyc
+*.swp
+.vscode/
+.idea/

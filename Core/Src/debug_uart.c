@@ -4,6 +4,8 @@
  */
 
 #include "debug_uart.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 /* ===========================================================================
  * PRIVATE VARIABLES
@@ -107,15 +109,35 @@ void Debug_PrintHex(const uint8_t *data, uint32_t size)
 {
     if (data == NULL || size == 0)
         return;
-    
+
     for (uint32_t i = 0; i < size; i++)
     {
         if (i % 16 == 0 && i > 0)
             Debug_Printf("\r\n");
-        
+
         Debug_Printf("%02X ", data[i]);
     }
     Debug_Printf("\r\n");
+}
+
+/**
+ * @brief Feed a received byte into debug UART ring buffer
+ */
+void Debug_RxByte(uint8_t byte)
+{
+    debug_rx_buffer[debug_rx_head] = byte;
+    debug_rx_head = (debug_rx_head + 1) % DEBUG_RX_BUFFER_SIZE;
+    debug_rx_count++;
+    if (debug_rx_count > DEBUG_RX_BUFFER_SIZE)
+        debug_rx_count = DEBUG_RX_BUFFER_SIZE;
+}
+
+/**
+ * @brief Re-arm debug UART RX interrupt
+ */
+void Debug_RearmRx(void)
+{
+    HAL_UART_Receive_IT(&huart1, &debug_rx_buffer[debug_rx_head], 1);
 }
 
 /**
@@ -139,51 +161,10 @@ void Debug_Test(void)
 }
 
 /* ===========================================================================
- * UART INTERRUPT HANDLER (called from stm32h7xx_it.c)
+ * HAL CALLBACKS
+ * Note: HAL_UART_RxCpltCallback, HAL_UART_TxCpltCallback, HAL_UART_ErrorCallback
+ * are implemented in ros2_comm.c as a merged handler for both USART1 and USART2.
  * =========================================================================== */
-
-/**
- * @brief UART RX complete callback
- * This function is called when a character is received
- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART1)
-    {
-        debug_rx_head = (debug_rx_head + 1) % DEBUG_RX_BUFFER_SIZE;
-        debug_rx_count++;
-        
-        if (debug_rx_count > DEBUG_RX_BUFFER_SIZE)
-            debug_rx_count = DEBUG_RX_BUFFER_SIZE;
-        
-        /* Continue receiving */
-        HAL_UART_Receive_IT(&huart1, &debug_rx_buffer[debug_rx_head], 1);
-    }
-}
-
-/**
- * @brief UART TX complete callback (optional)
- */
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART1)
-    {
-        /* TX complete - can be used for flow control */
-    }
-}
-
-/**
- * @brief UART error callback
- */
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART1)
-    {
-        /* Clear error and re-enable RX */
-        __HAL_UART_CLEAR_OREFLAG(&huart1);
-        HAL_UART_Receive_IT(&huart1, &debug_rx_buffer[debug_rx_head], 1);
-    }
-}
 
 /* ===========================================================================
  * LIBC INTEGRATION - Redirect printf() to Debug UART

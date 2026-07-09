@@ -107,6 +107,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART3_UART_Init(void);
 void StartDefaultTask(void *argument);
+void MX_FREERTOS_Init(void);
 
 /* USER CODE BEGIN PFP */
 
@@ -196,8 +197,7 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  /* creation of defaultTask - moved to MX_FREERTOS_Init() in freertos.c */
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -206,6 +206,9 @@ int main(void)
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
+
+  /* Initialize all RTOS resources and create application tasks */
+  MX_FREERTOS_Init();
 
   /* Start scheduler */
   osKernelStart();
@@ -456,7 +459,14 @@ static void MX_FDCAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN2_Init 2 */
-
+  /* Reconfigure FDCAN2 for RX FIFO */
+  hfdcan2.Init.StdFiltersNbr = 1;
+  hfdcan2.Init.RxFifo0ElmtsNbr = 8;
+  hfdcan2.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan2.Init.RxBuffersNbr = 0;
+  hfdcan2.Init.TxBuffersNbr = 3;
+  hfdcan2.Init.TxFifoQueueElmtsNbr = 4;
+  HAL_FDCAN_Init(&hfdcan2);
   /* USER CODE END FDCAN2_Init 2 */
 
 }

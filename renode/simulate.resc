@@ -1,0 +1,20 @@
+:name: STM32H750 Application Simulation
+
+mach create
+machine LoadPlatformDescription @renode/stm32h750_board.repl
+
+# Init PWR registers for SystemClock_Config
+sysbus WriteDoubleWord 0x58024804 0x00002000
+sysbus WriteDoubleWord 0x5802480C 0x00002000
+
+# Show debug console (USART1 - debug UART)
+showAnalyzer sysbus.usart1
+# Show ROS2 console (USART2 - ROS2 bridge)
+showAnalyzer sysbus.usart2
+
+# Load application ELF into QSPI (app runs at 0x90000000)
+sysbus LoadELF @build/STM32H750.elf
+cpu VectorTableOffset 0x90000000
+
+# Wait then start simulation
+emulation RunFor "0.1"

@@ -1,0 +1,18 @@
+using "platforms/cpus/stm32h743.repl"
+
+// STM32H750: 128KB internal flash
+flashBank1:
+    size: 0x20000
+
+// External QSPI flash (W25Q64) memory-mapped at 0x90000000
+qspiFlash: Memory.MappedMemory @ sysbus 0x90000000
+    size: 0x800000  // 8MB
+
+// PWR controller - basic simulation for SystemClock_Config
+// Must return VOSRDY (bit13) in CSR1 (offset 0x04) so HAL doesn't hang
+pwr: Memory.MappedMemory @ sysbus 0x58024800
+    size: 0x400
+
+// DBGMCU (Debug MCU) - read during HAL_Init for chip ID
+dbgmcu: Memory.MappedMemory @ sysbus 0x5C001000
+    size: 0x400
