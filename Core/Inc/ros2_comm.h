@@ -33,6 +33,7 @@ typedef enum {
     MSG_TYPE_STATUS,        /* {"t":"h",...} STM32 -> Pi (heartbeat) */
     MSG_TYPE_FDCAN_RX,      /* {"t":"f",...} STM32 -> Pi */
     MSG_TYPE_CMD_MOTOR,     /* {"t":"m",...} Pi -> STM32 */
+    MSG_TYPE_CMD_FLIGHT,    /* {"t":"fc",...} Pi -> STM32 */
     MSG_TYPE_CMD_GPIO,      /* {"t":"g",...} Pi -> STM32 */
     MSG_TYPE_CMD_FDCAN_TX,  /* {"t":"c",...} Pi -> STM32 */
     MSG_TYPE_CMD_SDLOG,     /* {"t":"l",...} Pi -> STM32 */
@@ -55,6 +56,14 @@ typedef struct {
     uint8_t motor[4];       /* PWM values 0-255 -> mapped to timer */
     bool armed;
 } ros2_motor_msg_t;
+
+typedef struct {
+    bool armed;
+    float thrust_norm;
+    float roll_rad;
+    float pitch_rad;
+    float yaw_rate_rad_s;
+} ros2_fc_cmd_t;
 
 typedef struct {
     uint32_t id;
@@ -91,6 +100,7 @@ typedef struct {
     ros2_msg_type_t type;
     union {
         ros2_motor_msg_t motor;
+        ros2_fc_cmd_t flight;
         ros2_fdcan_msg_t fdcan;
         ros2_gpio_msg_t gpio;
         ros2_sdlog_msg_t sdlog;

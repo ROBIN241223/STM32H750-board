@@ -5,8 +5,8 @@ ROS2 serial bridge package cho STM32H750 Flight Controller.
 ## Cài đặt
 
 ```bash
-# Yêu cầu: ROS2 Humble trên Raspberry Pi 5
-sudo apt install ros-humble-desktop python3-pip
+# Yêu cầu: ROS2 Jazzy (Ubuntu 24.04) trên Raspberry Pi 5
+sudo apt install ros-jazzy-desktop python3-pip
 pip3 install pyserial
 
 # Build
@@ -16,6 +16,8 @@ cd ~/stm32_ws
 colcon build --packages-select stm32_bridge
 source install/setup.bash
 ```
+
+> Trên máy dev hiện tại, `ros2_bridge/build.sh` tự source ROS 2 rồi chạy `colcon build`.
 
 ## Chạy
 
@@ -43,6 +45,7 @@ ros2 run stm32_bridge bridge_node.py --ros-args -p serial_port:=/dev/ttyUSB0
 | Topic | Type | Nội dung |
 |-------|------|----------|
 | `/stm32/cmd/motor` | `Float32MultiArray` | `[m1, m2, m3, m4, armed]` (0-255 PWM) |
+| `/stm32/cmd/flight` | `Float32MultiArray` | `[thrust, roll_rad, pitch_rad, yaw_rate_rad_s, armed]` |
 | `/stm32/cmd/gpio` | `Int32MultiArray` | `[pin_number, value]` |
 | `/stm32/cmd/fdcan_tx` | `Int32MultiArray` | `[can_id, dlc, data0, ...]` |
 | `/stm32/cmd/sdlog` | `String` | `{"start": true}` hoặc `{"start": false}` |
@@ -59,6 +62,9 @@ ros2 topic echo /stm32/status
 
 # Điều khiển motor (PWM 0-255, armed=1)
 ros2 topic pub /stm32/cmd/motor std_msgs/Float32MultiArray "{data: [100, 100, 100, 100, 1]}"
+
+# Gửi setpoint flight controller: thrust, roll, pitch, yaw-rate, armed
+ros2 topic pub /stm32/cmd/flight std_msgs/Float32MultiArray "{data: [0.0, 0.0, 0.0, 0.0, 0.0]}"
 
 # Bắt đầu ghi SD card
 ros2 topic pub /stm32/cmd/sdlog std_msgs/String '{"data": "{\"start\":true}"}'

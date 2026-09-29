@@ -19,6 +19,8 @@
 #include "ros2_comm.h"
 #include "ros2_sensor.h"
 #include "ros2_motor.h"
+#include "flight_controller.h"
+#include "imu_port.h"
 #include "fdcan_comm.h"
 #include "sd_logger.h"
 #include "ota_update.h"
@@ -33,6 +35,7 @@
 #define TASK_STACK_FDCAN         (256)
 #define TASK_STACK_SDLOG         (512)
 #define TASK_STACK_ROS2_COMM     (512)
+#define TASK_STACK_FLIGHT        (1024)
 
 /* Task priorities */
 #define TASK_PRIO_SENSOR         (osPriorityAboveNormal)
@@ -54,6 +57,9 @@ static osThreadId_t sensorTaskHandle;
 static osThreadId_t motorTaskHandle;
 static osThreadId_t fdcanTaskHandle;
 static osThreadId_t sdlogTaskHandle;
+static osThreadId_t flightTaskHandle;
+static imu_port_t imu0_port;
+static imu_port_t imu1_port;
 
 /* USER CODE END Variables */
 
@@ -128,6 +134,9 @@ void MX_FREERTOS_Init(void)
     ROS2_Comm_Init();
     ROS2_Sensor_Init();
     ROS2_Motor_Init();
+    IMU_Port_Null_Init(&imu0_port);
+    IMU_Port_Null_Init(&imu1_port);
+    (void)FC_Init(&imu0_port, &imu1_port);
     FDCAN_Comm_Init();
     OTA_Init();
     SD_Logger_Init();
@@ -164,6 +173,14 @@ void MX_FREERTOS_Init(void)
             .priority = TASK_PRIO_MOTOR,
         });
 
+    flightTaskHandle = osThreadNew(
+        FC_Task, NULL,
+        &(const osThreadAttr_t){
+            .name = "flight",
+            .stack_size = TASK_STACK_FLIGHT * 4,
+            .priority = TASK_PRIO_MOTOR,
+        });
+
     fdcanTaskHandle = osThreadNew(
         FDCAN_Comm_Task, NULL,
         &(const osThreadAttr_t){
@@ -185,7 +202,7 @@ void MX_FREERTOS_Init(void)
                  osPriorityBelowNormal, NULL);
 
     DEBUG_INFO("[RTOS] All tasks created");
-    DEBUG_INFO("[RTOS] Tasks: ros2Comm, sensor, motor, fdcan, sdlog, heartbeat, default");
+    DEBUG_INFO("[RTOS] Tasks: ros2Comm, sensor, motor, flight, fdcan, sdlog, heartbeat, default");
 
     /* USER CODE END RTOS_THREADS */
 }

@@ -27,6 +27,11 @@ extern TIM_HandleTypeDef htim2;
 
 static motor_state_t motor_state;
 static QueueHandle_t motor_cmd_queue = NULL;
+static volatile motor_owner_t motor_owner = MOTOR_OWNER_MANUAL;
+static volatile bool flight_arm_request = false;
+static volatile bool flight_output_valid = false;
+static fc_motor_output_t flight_output;
+static volatile uint32_t flight_output_tick = 0U;
 
 /* TIM2 tick rate: 240MHz / (Prescaler+1) = 240MHz/60 = 4MHz -> 0.25us per tick */
 #define TIM2_TICK_HZ        4000000
@@ -41,6 +46,11 @@ void ROS2_Motor_Init(void)
     memset(&motor_state, 0, sizeof(motor_state));
     motor_state.armed = false;
     motor_state.failsafe = false;
+    motor_owner = MOTOR_OWNER_MANUAL;
+    flight_arm_request = false;
+    flight_output_valid = false;
+    memset(&flight_output, 0, sizeof(flight_output));
+    flight_output_tick = 0U;
 
     /* Reconfigure TIM2 for ESC PWM: 50Hz */
     /* Stop timer first */
@@ -202,24 +212,53 @@ void ROS2_Motor_Task(void *argument)
 {
     ros2_motor_msg_t cmd;
 
+    (void)argument;
     DEBUG_INFO("[Motor] Task started");
 
     while (1) {
-        /* Check for incoming motor commands */
         if (xQueueReceive(motor_cmd_queue, &cmd, pdMS_TO_TICKS(10)) == pdTRUE) {
-            if (cmd.armed && !motor_state.armed) {
-                ROS2_Motor_Arm();
-            } else if (!cmd.armed && motor_state.armed) {
-                ROS2_Motor_Disarm();
-            }
-
-            if (motor_state.armed) {
-                ROS2_Motor_SetAll(cmd.motor);
+            if (motor_owner == MOTOR_OWNER_MANUAL) {
+                if (cmd.armed && !motor_state.armed) {
+                    ROS2_Motor_Arm();
+                } else if (!cmd.armed && motor_state.armed) {
+                    ROS2_Motor_Disarm();
+                }
+                if (motor_state.armed) {
+                    ROS2_Motor_SetAll(cmd.motor);
+                }
             }
         }
 
-        /* Failsafe check */
-        ROS2_Motor_FailsafeCheck();
+        if (motor_owner == MOTOR_OWNER_FLIGHT) {
+            uint32_t now = osKernelGetTickCount();
+            uint32_t age = now - flight_output_tick;
+            if (flight_arm_request && !motor_state.armed) {
+                ROS2_Motor_Arm();
+            }
+            if (!flight_arm_request && motor_state.armed) {
+                ROS2_Motor_Disarm();
+            }
+            if (motor_state.armed && flight_output_valid && (age <= 100U)) {
+                taskENTER_CRITICAL();
+                for (uint8_t i = 0U; i < MOTOR_COUNT; i++) {
+                    motor_state.pwm_us[i] = (uint16_t)(
+                        MOTOR_PWM_MIN_US +
+                        ((uint32_t)flight_output.pwm[i] *
+                         (MOTOR_PWM_MAX_US - MOTOR_PWM_MIN_US) / 255U));
+                    set_pwm_channel(
+                        (i == 0U) ? MOTOR1_CHANNEL :
+                        (i == 1U) ? MOTOR2_CHANNEL :
+                        (i == 2U) ? MOTOR3_CHANNEL : MOTOR4_CHANNEL,
+                        motor_state.pwm_us[i]);
+                }
+                taskEXIT_CRITICAL();
+                motor_state.last_cmd_tick = now;
+            } else if (motor_state.armed && (age > 100U)) {
+                ROS2_Motor_FlightFault();
+            }
+        } else {
+            ROS2_Motor_FailsafeCheck();
+        }
     }
 }
 
@@ -232,4 +271,49 @@ void ROS2_Motor_EnqueueCmd(ros2_motor_msg_t *cmd)
     if (motor_cmd_queue && cmd) {
         xQueueOverwrite(motor_cmd_queue, cmd);
     }
+}
+
+void ROS2_Motor_RequestFlightArm(void)
+{
+    motor_owner = MOTOR_OWNER_FLIGHT;
+    flight_arm_request = true;
+    motor_state.failsafe = false;
+}
+
+void ROS2_Motor_FlightDisarm(void)
+{
+    flight_arm_request = false;
+    flight_output_valid = false;
+    if (motor_state.armed) {
+        ROS2_Motor_Disarm();
+    }
+    motor_owner = MOTOR_OWNER_NONE;
+}
+
+void ROS2_Motor_FlightFault(void)
+{
+    flight_arm_request = false;
+    flight_output_valid = false;
+    if (motor_state.armed || !motor_state.failsafe) {
+        ROS2_Motor_EmergencyStop();
+    }
+    motor_state.armed = false;
+    motor_owner = MOTOR_OWNER_NONE;
+}
+
+void ROS2_Motor_SubmitFlightOutput(const fc_motor_output_t *output)
+{
+    if (output == NULL) {
+        return;
+    }
+    taskENTER_CRITICAL();
+    flight_output = *output;
+    flight_output_tick = osKernelGetTickCount();
+    flight_output_valid = output->valid && output->armed;
+    taskEXIT_CRITICAL();
+}
+
+motor_owner_t ROS2_Motor_GetOwner(void)
+{
+    return motor_owner;
 }

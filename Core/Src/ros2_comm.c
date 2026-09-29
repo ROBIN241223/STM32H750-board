@@ -5,14 +5,18 @@
 
 #include "ros2_comm.h"
 #include "ros2_motor.h"
+#include "flight_controller.h"
 #include "fdcan_comm.h"
 #include "ota_update.h"
 #include "sd_logger.h"
 #include "debug_uart.h"
+#include "gps_port.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "cmsis_os2.h"
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -72,6 +76,13 @@ static int json_get_int(const char *json, const char *key, int default_val)
     return atoi(p);
 }
 
+static float json_get_float(const char *json, const char *key, float default_val)
+{
+    const char *p = json_find_key(json, key);
+    if (!p) return default_val;
+    return strtof(p, NULL);
+}
+
 static const char* json_get_string(const char *json, const char *key, char *buf, uint32_t buf_size)
 {
     const char *p = json_find_key(json, key);
@@ -117,6 +128,23 @@ static bool parse_message(const char *json, ros2_parsed_msg_t *msg)
         msg->motor.motor[1] = (uint8_t)json_get_int(json, "m2", 0);
         msg->motor.motor[2] = (uint8_t)json_get_int(json, "m3", 0);
         msg->motor.motor[3] = (uint8_t)json_get_int(json, "m4", 0);
+        return true;
+    }
+    else if (strcmp(type_str, "fc") == 0) {
+        msg->type = MSG_TYPE_CMD_FLIGHT;
+        msg->flight.armed = (json_get_int(json, "a", 0) == 1);
+        msg->flight.thrust_norm = json_get_float(json, "th", 0.0f);
+        msg->flight.roll_rad = json_get_float(json, "r", 0.0f);
+        msg->flight.pitch_rad = json_get_float(json, "p", 0.0f);
+        msg->flight.yaw_rate_rad_s = json_get_float(json, "y", 0.0f);
+        if (!isfinite(msg->flight.thrust_norm) ||
+            !isfinite(msg->flight.roll_rad) ||
+            !isfinite(msg->flight.pitch_rad) ||
+            !isfinite(msg->flight.yaw_rate_rad_s)) {
+            return false;
+        }
+        if (msg->flight.thrust_norm < 0.0f) msg->flight.thrust_norm = 0.0f;
+        if (msg->flight.thrust_norm > 1.0f) msg->flight.thrust_norm = 1.0f;
         return true;
     }
     else if (strcmp(type_str, "g") == 0) {
@@ -254,6 +282,18 @@ uint32_t ROS2_Comm_Process(void)
                 case MSG_TYPE_CMD_MOTOR:
                     ROS2_Motor_EnqueueCmd(&msg.motor);
                     break;
+
+                case MSG_TYPE_CMD_FLIGHT: {
+                    fc_setpoint_t setpoint;
+                    setpoint.armed = msg.flight.armed;
+                    setpoint.thrust_norm = msg.flight.thrust_norm;
+                    setpoint.roll_rad = msg.flight.roll_rad;
+                    setpoint.pitch_rad = msg.flight.pitch_rad;
+                    setpoint.yaw_rate_rad_s = msg.flight.yaw_rate_rad_s;
+                    setpoint.timestamp_ms = osKernelGetTickCount();
+                    FC_Setpoint_Update(&setpoint);
+                    break;
+                }
 
                 case MSG_TYPE_CMD_FDCAN_TX: {
                     fdcan_tx_msg_t tx;
@@ -394,6 +434,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             rx_count = ROS2_RX_BUFFER_SIZE;
         HAL_UART_Receive_IT(&huart2, &rx_buffer[rx_head], 1);
     }
+    else if (huart->Instance == USART3) {
+        /* GNSS UART: the GPS port owns the ring and the re-arm */
+        uint8_t byte = huart->pRxBuffPtr[0];
+        GPS_Port_RxByte(byte);
+    }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -410,5 +455,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     else if (huart->Instance == USART2) {
         __HAL_UART_CLEAR_OREFLAG(&huart2);
         HAL_UART_Receive_IT(&huart2, &rx_buffer[rx_head], 1);
+    }
+    else if (huart->Instance == USART3) {
+        GPS_Port_UartRearm();
     }
 }

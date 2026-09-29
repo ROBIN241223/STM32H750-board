@@ -59,6 +59,8 @@ class STM32Bridge(Node):
         # Subscribers (Pi -> STM32)
         self.sub_motor = self.create_subscription(
             Float32MultiArray, '/stm32/cmd/motor', self.cmd_motor_cb, 10)
+        self.sub_flight = self.create_subscription(
+            Float32MultiArray, '/stm32/cmd/flight', self.cmd_flight_cb, 10)
         self.sub_gpio = self.create_subscription(
             Int32MultiArray, '/stm32/cmd/gpio', self.cmd_gpio_cb, 10)
         self.sub_fdcan_tx = self.create_subscription(
@@ -168,6 +170,18 @@ class STM32Bridge(Node):
                 'm3': int(data[2]),
                 'm4': int(data[3]),
                 'a': 1 if data[4] > 0.5 else 0,
+            })
+
+    def cmd_flight_cb(self, msg):
+        data = msg.data
+        if len(data) >= 5:
+            self._send_json({
+                't': 'fc',
+                'a': 1 if data[4] > 0.5 else 0,
+                'th': float(data[0]),
+                'r': float(data[1]),
+                'p': float(data[2]),
+                'y': float(data[3]),
             })
 
     def cmd_gpio_cb(self, msg):

@@ -8,6 +8,7 @@
 
 #include "main.h"
 #include "ros2_comm.h"
+#include "fc_types.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -40,6 +41,12 @@ typedef struct {
     bool failsafe;
     uint32_t last_cmd_tick;                 /* last command received tick */
 } motor_state_t;
+
+typedef enum {
+    MOTOR_OWNER_NONE = 0,
+    MOTOR_OWNER_MANUAL,
+    MOTOR_OWNER_FLIGHT
+} motor_owner_t;
 
 /* ===========================================================================
  * FUNCTIONS
@@ -98,5 +105,11 @@ void ROS2_Motor_Task(void *argument);
  * @param cmd Motor command to enqueue
  */
 void ROS2_Motor_EnqueueCmd(ros2_motor_msg_t *cmd);
+
+void ROS2_Motor_RequestFlightArm(void);
+void ROS2_Motor_FlightDisarm(void);
+void ROS2_Motor_FlightFault(void);
+void ROS2_Motor_SubmitFlightOutput(const fc_motor_output_t *output);
+motor_owner_t ROS2_Motor_GetOwner(void);
 
 #endif /* ROS2_MOTOR_H */
