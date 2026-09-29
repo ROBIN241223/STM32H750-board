@@ -1590,3 +1590,41 @@ make -j$(nproc)        # firmware link sạch, không warning
 - **Compass**: calibration vẫn tự chạy liên tục khi còn xoay; chưa có lệnh telemetry
   bắt đầu/dừng bằng tay, chưa lưu xuống flash.
 - **Mag chưa calibration 3×3/ellipsoid** như PX4 — hiện mới scale theo từng trục.
+
+### 8. Đã commit và push
+
+Commit `ad6c875` — *"Add flight stack, nav sensors, Gazebo SITL harness, and fix
+sustained-turn attitude"* — 100 files, +15645/−35 dòng. Đã push lên
+`https://github.com/ROBIN241223/STM32H750-board` (`c294d4c..ad6c875 main -> main`),
+fast-forward thuần, `origin/main == HEAD`, working tree sạch.
+
+**Git identity**: repo chưa có `user.name`/`user.email` nên commit đầu bị chặn. Không sửa
+git config (theo nguyên tắc không tự ý đổi config của user) — dùng override tạm thời
+`git -c user.name=... -c user.email=...` với đúng identity commit gần nhất
+(`Nguyễn Trung Đức <nguyentrungducnatsu2412@gmail.com>`). Việc này **không lâu**; muốn cố
+định thì tự chạy `git config user.name/user.email` trong repo.
+
+#### Ba thứ cố ý KHÔNG đưa vào git
+
+| Đường dẫn | Vì sao loại |
+|---|---|
+| `.embedder/` | Metadata tool/LSP, chứa `bootstrap-context-prod.enc` — file **encrypted** bootstrap context. Không phải source, rủi ro lộ bí mật. |
+| `ros2_bridge/_ws/` | Workspace colcon do `ros2_bridge/build.sh` sinh ra hoàn toàn. `install/`+`log/` là artifact, `_ws/src/stm32_bridge` chỉ là **symlink** trỏ ngược về `ros2_bridge/` đã được track. 50 file, toàn bộ thừa. |
+| `gazebo_sim/imu_plugin/libimu_plugin.so` | Artifact compile từ `imu_plugin.cc`. Nằm ngoài `build/` nên pattern `build/` trong `.gitignore` không bắt được — phải thêm `*.so`. |
+
+Đã thêm vào `.gitignore`: `.embedder/`, `ros2_bridge/_ws/`, `*.so`.
+
+#### Hai cảnh báo về tính trung thực của bằng chứng
+
+1. **CSV chuyến bay không có trong git.** `gazebo_sim/logs/` đã bị ignore từ trước, nên
+   `flight-20260929-073004.csv` (bằng chứng hạ 8 mm) **không được push**. Người đọc repo
+   không tự verify được các bảng số trong mục 6. Nếu muốn giữ bằng chứng thì copy log tốt
+   sang `docs/flight-evidence/` và bỏ ignore — hoặc ghi rõ trong README rằng số liệu chỉ
+   tồn tại ở máy local.
+2. **Ground truth có tham gia vào estimator.** `gazebo_sim/README.md` trước đây ghi
+   *"ground-truth pose ... never fed to the estimator"* — **đã sai**, và đã sửa lại. Thực tế
+   `FC_Estimator_FeedPosition` có được gọi, và test đứng yên dùng **tốc độ ngang** từ đó
+   để phân biệt nghiêng thật với tải hướng tâm. Attitude thì **không** lấy từ pose (roll/pitch
+   do gyro mang, heading lấy từ nam châm), nên đây không phải gian lận, nhưng cũng **không
+   phải bằng chứng rằng estimator tự lo được trên phần cứng thật**: xe thật phải lấy câu trả
+   lời đó từ GPS, và còn cần EKF thật. Đã ghi rõ điều này trong cả README lẫn nhật ký này.
